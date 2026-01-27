@@ -1,10 +1,4 @@
-//
-//  ContentView.swift
-//  grateful-motion
-//
-//  Created by Muhamad Zibrisky on 27/01/26.
-//
-
+/*
 import SwiftUI
 import SwiftData
 
@@ -57,3 +51,4 @@ struct ContentView: View {
     ContentView()
         .modelContainer(for: Item.self, inMemory: true)
 }
+*/
