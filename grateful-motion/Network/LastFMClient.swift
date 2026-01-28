@@ -279,7 +279,7 @@ class LastFMClient: ObservableObject {
 		if let username = username, !username.isEmpty {
 			do {
 				let recentTracks = try await getRecentTracks(username: username, limit: 1)
-				if let firstTrack = recentTracks.first, !isImageEmpty(firstTrack.image) {
+                if let firstTrack = recentTracks.first, !isImageEmpty(firstTrack.image), firstTrack.attr?.nowplaying == "true" {
 					return firstTrack.image.first(where: { $0.size == "large" })?.url ??
 					       firstTrack.image.first(where: { $0.size == "medium" })?.url ??
 					       firstTrack.image.first(where: { $0.size == "small" })?.url
