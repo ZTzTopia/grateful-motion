@@ -256,8 +256,8 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
                     self.scrobbleCount += 1
                     self.recentScrobbles.insert(record, at: 0)
 
-                    if self.recentScrobbles.count > 50 {
-                        self.recentScrobbles = Array(self.recentScrobbles.prefix(50))
+                    if self.recentScrobbles.count > 10 {
+                        self.recentScrobbles.removeLast()
                     }
 
                     NSLog("ScrobbleEngine: Scrobble saved, history updated (count: \(self.recentScrobbles.count))")
@@ -289,10 +289,11 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 
 	func loadRecentScrobbles() {
 		Task {
-			let scrobbles = scrobbleDatabase.fetchScrobbles()
+			let scrobbles = scrobbleDatabase.fetchScrobbles(limit: 10)
+			let totalCount = scrobbleDatabase.countScrobbles()
 			await MainActor.run {
 				self.recentScrobbles = scrobbles
-				self.scrobbleCount = scrobbles.count
+				self.scrobbleCount = totalCount
 			}
 		}
 	}

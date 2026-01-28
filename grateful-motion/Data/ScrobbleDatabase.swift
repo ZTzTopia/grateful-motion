@@ -38,6 +38,11 @@ class ScrobbleDatabase {
 		"""
 
 		sqlite3_exec(db, createScrobblesTable, nil, nil, nil)
+
+		let createTimestampIndex = """
+		CREATE INDEX IF NOT EXISTS idx_timestamp ON scrobbles(timestamp DESC);
+		"""
+		sqlite3_exec(db, createTimestampIndex, nil, nil, nil)
 	}
 
 	func saveScrobble(_ record: ScrobbleRecord) {
@@ -118,6 +123,21 @@ class ScrobbleDatabase {
 
 		sqlite3_finalize(statement)
 		return records
+	}
+
+	func countScrobbles() -> Int {
+		let querySQL = "SELECT COUNT(*) FROM scrobbles;"
+		var count: Int = 0
+
+		var statement: OpaquePointer?
+		if sqlite3_prepare_v2(db, querySQL, -1, &statement, nil) == SQLITE_OK {
+			if sqlite3_step(statement) == SQLITE_ROW {
+				count = Int(sqlite3_column_int64(statement, 0))
+			}
+		}
+
+		sqlite3_finalize(statement)
+		return count
 	}
 
 	deinit {
