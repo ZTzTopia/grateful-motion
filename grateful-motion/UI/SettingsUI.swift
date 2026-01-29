@@ -26,7 +26,7 @@ struct SettingsView: View {
 								.font(.headline)
 							Spacer()
 						}
-						
+
 						Button("Logout", role: .destructive) {
 							showLogoutAlert = true
 						}
@@ -49,7 +49,7 @@ struct SettingsView: View {
 				Section {
 					Toggle("Enable Scrobbling", isOn: $engine.isScrobblingEnabled)
 				}
-				
+
 				Section(header: Text("Music Service")) {
 					Picker("Open Links In", selection: $preferredService) {
 						Text("Last.fm").tag("lastfm")
@@ -90,14 +90,14 @@ struct SettingsView: View {
 							}
 						}
 					}
-					
+
 					Button("Add Replacement Rule") {
 						currentEditingRule = nil
 						showReplacementRuleSheet = true
 					}
 					.buttonStyle(.borderless)
 				}
-				
+
 				Section(header: Text("Filter Rules")) {
 					ForEach(engine.metadataProcessor.filterRules) { rule in
 						HStack {
@@ -139,20 +139,20 @@ struct SettingsView: View {
 							}
 						}
 					}
-					
+
 					Button("Add Filter Rule") {
 						currentEditingFilterRule = nil
 						showFilterRuleSheet = true
 					}
 					.buttonStyle(.borderless)
 				}
-				
+
 				Section {
 					Button("Reset to Default Rules", role: .destructive) {
 						engine.metadataProcessor.loadDefaultRules()
 					}
 				}
-				
+
 				Section {
 					Text("Current Track:")
 						.font(.headline)
@@ -164,7 +164,7 @@ struct SettingsView: View {
 				}
 			}
 			.formStyle(.grouped)
-			
+
 			HStack {
 				Spacer()
 				Button("Done") {
@@ -258,33 +258,33 @@ struct ReplacementRuleSheet: View {
 					TextField("Enter pattern", text: $pattern)
 						.font(.system(.body, design: .monospaced))
 				}
-				
+
 				Section("Replacement") {
 					TextField("Enter replacement", text: $replacement)
 						.font(.system(.body, design: .monospaced))
 				}
-				
+
 				Section("Target Fields") {
 					Toggle("Title", isOn: $targetTitle)
 					Toggle("Artist", isOn: $targetArtist)
 					Toggle("Album", isOn: $targetAlbum)
 				}
-				
+
 				Section("Apply To") {
 					Toggle("Display", isOn: $useDisplay)
 					Toggle("Scrobble", isOn: $useScrobble)
 				}
 			}
 			.formStyle(.grouped)
-			
+
 			HStack {
 				Button("Cancel", role: .cancel) {
 					onCancel()
 				}
 				.keyboardShortcut(.escape, modifiers: [])
-				
+
 				Spacer()
-				
+
 				Button("Save") {
 					let useCase: ReplacementRule.RuleUseCase
 					if useDisplay && useScrobble {
@@ -294,12 +294,12 @@ struct ReplacementRuleSheet: View {
 					} else {
 						useCase = .scrobble
 					}
-					
+
 					var targetFields: [String] = []
 					if targetTitle { targetFields.append("title") }
 					if targetArtist { targetFields.append("artist") }
 					if targetAlbum { targetFields.append("album") }
-					
+
 					let newRule = ReplacementRule(
 						pattern: pattern,
 						replacement: replacement,
@@ -320,37 +320,37 @@ struct ReplacementRuleSheet: View {
 
 struct FilterRuleSheet: View {
 	@Environment(\.dismiss) var dismiss
-	
+
 	let rule: FilterRule?
 	let onSave: (FilterRule) -> Void
 	let onCancel: () -> Void
-	
+
 	@State private var pattern: String
 	@State private var matchType: FilterRule.MatchType
 	@State private var logic: FilterRule.FilterLogic
-	
+
 	init(rule: FilterRule?, onSave: @escaping (FilterRule) -> Void, onCancel: @escaping () -> Void) {
 		self.rule = rule
 		self.onSave = onSave
 		self.onCancel = onCancel
-		
+
 		_pattern = State(initialValue: rule?.pattern ?? "")
 		_matchType = State(initialValue: rule?.matchType ?? .regex)
 		_logic = State(initialValue: rule?.logic ?? .exclude)
 	}
-	
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text(rule == nil ? "Add Filter Rule" : "Edit Filter Rule")
 				.font(.title2)
 				.fontWeight(.bold)
-			
+
 			Form {
 				Section("Pattern") {
 					TextField("Enter pattern", text: $pattern)
 						.font(.system(.body, design: .monospaced))
 				}
-				
+
 				Section("Match Type") {
 					Picker("Match Type", selection: $matchType) {
 						Text("Regex").tag(FilterRule.MatchType.regex)
@@ -359,7 +359,7 @@ struct FilterRuleSheet: View {
 					}
 					.pickerStyle(.segmented)
 				}
-				
+
 				Section("Logic") {
 					Picker("Logic", selection: $logic) {
 						Text("Exclude").tag(FilterRule.FilterLogic.exclude)
@@ -373,15 +373,15 @@ struct FilterRuleSheet: View {
 				}
 			}
 			.formStyle(.grouped)
-			
+
 			HStack {
 				Button("Cancel", role: .cancel) {
 					onCancel()
 				}
 				.keyboardShortcut(.escape, modifiers: [])
-				
+
 				Spacer()
-				
+
 				Button("Save") {
 					let newRule = FilterRule(
 						pattern: pattern,
@@ -403,13 +403,13 @@ struct FilterRuleSheet: View {
 struct HistoryView: View {
 	@ObservedObject var engine: ScrobbleEngine
 	@Environment(\.dismiss) var dismiss
-	
+
 	var body: some View {
 		VStack(alignment: .leading, spacing: 16) {
 			Text("Recently Played")
 				.font(.title2)
 				.fontWeight(.bold)
-			
+
 			List {
 				ForEach(engine.recentScrobbles) { record in
 					HStack(spacing: 12) {
@@ -428,9 +428,9 @@ struct HistoryView: View {
 									.lineLimit(1)
 							}
 						}
-						
+
 						Spacer()
-						
+
 						Text(record.timestamp, style: .time)
 							.font(.caption2)
 							.foregroundColor(.secondary)
@@ -439,7 +439,7 @@ struct HistoryView: View {
 				}
 			}
 			.listStyle(.inset)
-			
+
 			HStack {
 				Spacer()
 				Button("Close") {

@@ -57,10 +57,10 @@ class AppleMusicScriptBridge {
         if components.count >= 4 {
             let posStr = components[0].replacingOccurrences(of: ",", with: ".")
             let position = Double(posStr) ?? 0.0
-            
+
             let pState = components[1].lowercased()
             let isPlaying = pState == "playing" || pState == "kpsp"
-            
+
             let rModeStr = components[2].lowercased()
             var repeatMode: Track.RepeatMode = .off
 
@@ -69,13 +69,13 @@ class AppleMusicScriptBridge {
             } else if rModeStr.contains("all") || rModeStr == "krml" {
                 repeatMode = .all
             }
-            
+
             let durStr = components[3].replacingOccurrences(of: ",", with: ".")
             let duration = Double(durStr) ?? 0.0
 
             return (position, isPlaying, repeatMode, duration)
         }
-        
+
         NSLog("AppleMusicScriptBridge: Invalid result format, components: \(components.count)")
         return (0, false, .off, 0)
     }
