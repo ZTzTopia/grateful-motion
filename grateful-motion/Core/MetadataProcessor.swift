@@ -66,26 +66,26 @@ class MetadataProcessor: ObservableObject {
 
 	func process(_ track: Track) -> Track {
 		var processed = track
-		
+
 		if !matchesFilters(processed) {
 			return processed
 		}
-		
+
 		processed = applyReplacements(processed)
 		processed = applyArtistSplitting(processed)
-		
+
 		return processed
 	}
 
 	private func matchesFilters(_ track: Track) -> Bool {
 		guard !filterRules.isEmpty else { return true }
-		
+
 		let activeRules = filterRules.filter { $0.enabled }
 		guard !activeRules.isEmpty else { return true }
-		
+
 		for rule in activeRules {
 			let matches = checkFilterRule(rule, track: track)
-			
+
 			switch rule.logic {
 			case .exclude:
 				if matches { return false }
@@ -101,13 +101,13 @@ class MetadataProcessor: ObservableObject {
 				if matches { return false }
 			}
 		}
-		
+
 		return true
 	}
 
 	private func checkFilterRule(_ rule: FilterRule, track: Track) -> Bool {
 		let text = "\(track.artist) - \(track.title)"
-		
+
 		switch rule.matchType {
 		case .regex:
 			let regex = try? NSRegularExpression(pattern: rule.pattern)
@@ -123,7 +123,7 @@ class MetadataProcessor: ObservableObject {
 	private func applyReplacements(_ track: Track) -> Track {
 		var processed = track
 		let activeRules = replacementRules.filter { $0.enabled }
-		
+
 		for rule in activeRules {
 			for field in rule.targetFields {
 				switch field {
@@ -147,16 +147,16 @@ class MetadataProcessor: ObservableObject {
 				}
 			}
 		}
-		
+
 		return processed
 	}
 
 	private func applyRule(_ rule: ReplacementRule, to text: String) -> String {
 		guard let regex = try? NSRegularExpression(pattern: rule.pattern) else { return text }
-		
+
 		let range = NSRange(text.startIndex..., in: text)
 		let template = expandReplacementTemplate(rule.replacement)
-		
+
 		return regex.stringByReplacingMatches(in: text, range: range, withTemplate: template)
 	}
 
@@ -168,7 +168,7 @@ class MetadataProcessor: ObservableObject {
 
 	private func applyArtistSplitting(_ track: Track) -> Track {
 		let normalizedArtist = normalizeArtistSeparators(track.artist)
-		
+
 		let artistComponents = normalizedArtist.components(separatedBy: ", ")
 		guard artistComponents.count > 1 else { return track }
 
@@ -183,13 +183,13 @@ class MetadataProcessor: ObservableObject {
 			playerState: track.playerState
 		)
 	}
-	
+
 	private func normalizeArtistSeparators(_ artist: String) -> String {
 		var result = artist
-		
+
 		result = result.replacingOccurrences(of: "&", with: ", ")
 		result = result.replacingOccurrences(of: " / ", with: ", ")
-		
+
 		let andPattern = "(?i)\\band\\b"
 		if let regex = try? NSRegularExpression(pattern: andPattern) {
 			let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
@@ -199,7 +199,7 @@ class MetadataProcessor: ObservableObject {
 				}
 			}
 		}
-		
+
 		let aPattern = "(?i)\\ba\\b"
 		if let regex = try? NSRegularExpression(pattern: aPattern) {
 			let matches = regex.matches(in: result, range: NSRange(result.startIndex..., in: result))
@@ -211,50 +211,50 @@ class MetadataProcessor: ObservableObject {
 				}
 			}
 		}
-		
+
 		while result.contains(", ,") {
 			result = result.replacingOccurrences(of: ", ,", with: ", ")
 		}
 		while result.contains(" ,") {
 			result = result.replacingOccurrences(of: " ,", with: ", ")
 		}
-		
+
 		return result.trimmingCharacters(in: CharacterSet(charactersIn: ", "))
 	}
-	
+
 	private func shouldSplitOnA(_ text: String, range: Range<String.Index>) -> Bool {
 		let words = text.components(separatedBy: .whitespaces)
 		let rangeStart = text.distance(from: text.startIndex, to: range.lowerBound)
 		let rangeEnd = text.distance(from: text.startIndex, to: range.upperBound)
-		
+
 		var currentIndex = 0
 		var wordIndex = 0
-		
+
 		for word in words {
 			let wordStart = currentIndex
 			let wordEnd = currentIndex + word.count
 			currentIndex = wordEnd + 1
-			
+
 			if rangeStart >= wordStart && rangeEnd <= wordEnd {
 				break
 			}
 			wordIndex += 1
 		}
-		
+
 		if wordIndex == 0 || wordIndex >= words.count - 1 {
 			return false
 		}
-		
+
 		let beforeWord = words[wordIndex - 1].lowercased()
 		let afterWord = words[wordIndex + 1].lowercased()
-		
+
 		let skipBefore = ["the", "a", "an", "in", "on", "at", "for", "to", "with", "from", "by", "as", "of", "this", "that"]
 		let skipAfter = ["the", "a", "an", "one", "few", "little", "lot", "bit", "great", "good", "bad", "new", "old"]
-		
+
 		if skipBefore.contains(beforeWord) || skipAfter.contains(afterWord) {
 			return false
 		}
-		
+
 		return true
 	}
 

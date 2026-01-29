@@ -20,7 +20,7 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 
 	private var artworkFetchTask: Task<Void, Never>?
 	private var similarItemsFetchTask: Task<Void, Never>?
-	
+
 	private var lastFMClient: LastFMClient
 	private var scrobbleDatabase: ScrobbleDatabase
 	let metadataProcessor: MetadataProcessor
@@ -30,18 +30,18 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 	@MainActor private var scrobbleTimer: Timer?
 	@MainActor private var lastPosition: TimeInterval = 0
 	@MainActor private var consecutiveZeroPolls = 0
-    
+
     private var replayHandled = false
     private var endHandled = false
-	
+
 	init(lastFMClient: LastFMClient, scrobbleDatabase: ScrobbleDatabase, metadataProcessor: MetadataProcessor) {
 		self.lastFMClient = lastFMClient
 		self.scrobbleDatabase = scrobbleDatabase
 		self.metadataProcessor = metadataProcessor
-		
+
 		loadRecentScrobbles()
 	}
-	
+
 	@MainActor
 	func updateTrack(_ track: Track?) async {
         guard isScrobblingEnabled else { return }
@@ -59,38 +59,52 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 			Task {
 				try? await lastFMClient.updateNowPlaying(track: processedTrack)
 
-                artworkFetchTask?.cancel()
-                artworkFetchTask = Task {
-                    let maxRetries = 8
-                    var retryCount = 0
-                    var delay: TimeInterval = 0.5
-                    let maxDelay: TimeInterval = 8
+                let immediateArtwork = try? await lastFMClient.fetchArtwork(
+                    track: processedTrack,
+                    username: lastFMClient.credentials.username,
+                    allowFallback: true,
+                    skipRecentTracks: true
+                )
 
-                    // TODO: Find the better way without wait 1.5s
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
+                if let artworkURL = immediateArtwork {
+                    NSLog("ScrobbleEngine: Got immediate artwork from generic metadata: \(artworkURL)")
+                    await MainActor.run {
+                        self.currentTrack?.artworkURL = artworkURL
+                        self.lastArtworkURL = artworkURL
+                    }
+                }
 
-                    while retryCount < maxRetries && !Task.isCancelled {
-                        if let artworkURL = try? await lastFMClient.fetchArtwork(
-                            track: processedTrack,
-                            username: lastFMClient.credentials.username
-                        ) {
-                            NSLog("ScrobbleEngine: Successfully fetched track artwork image: \(artworkURL)")
-                            await MainActor.run {
-                                self.currentTrack?.artworkURL = artworkURL
-                                self.lastArtworkURL = artworkURL
-                            }
-
-                            return
-                        }
-
-                        retryCount += 1
-                        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                        delay = min(delay * 2, maxDelay)
+                let maxAttempts = 8
+                for attempt in 1...maxAttempts {
+                    let delay: UInt64 = switch attempt {
+                        case 1, 2: 500_000_000
+                        case 3, 4: 1_000_000_000
+                        default: 2_000_000_000
                     }
 
-                    NSLog("ScrobbleEngine: Artwork fetch gave up after \(retryCount) retries")
+                    try? await Task.sleep(nanoseconds: delay)
+
+                    let recentTracksArtwork = try? await lastFMClient.fetchArtwork(
+                        track: processedTrack,
+                        username: lastFMClient.credentials.username,
+                        allowFallback: false,
+                        skipRecentTracks: false,
+                        requireNewTrack: true
+                    )
+
+                    if let artworkURL = recentTracksArtwork {
+                        NSLog("ScrobbleEngine: Found authoritative artwork on attempt \(attempt): \(artworkURL)")
+                        await MainActor.run {
+                            self.currentTrack?.artworkURL = artworkURL
+                            self.lastArtworkURL = artworkURL
+                        }
+
+                        break
+                    }
+
+                    NSLog("ScrobbleEngine: Polling attempt \(attempt)/\(maxAttempts) - stale data or no artwork")
                 }
-			}
+            }
 
 			Task {
 				async let tracksTask = lastFMClient.getSimilarTracks(
@@ -142,7 +156,7 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 //                            currentTrack.isSameTrack(as: previousTrack) &&
 //                            self.lastPosition >= currentTrack.duration - 2 &&
                             isAtStart
-                        
+
                         if replayDetected {
                             NSLog("ScrobbleEngine: Replay detected, schedule new scrobble...")
 
@@ -158,21 +172,21 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
                                 playerState: .playing,
                                 artworkURL: currentTrack.artworkURL
                             )
-    
+
                             self.previousTrack = currentTrack
                             self.currentTrack = track
 
                             self.lastPosition = 0
                             self.currentPlaybackTime = 0
-                            
+
                             self.scheduleScrobble(for: currentTrack)
-                            
+
                             Task {
                                 try? await self.lastFMClient.updateNowPlaying(track: currentTrack)
                             }
                         }
 //                    }
-                    
+
                     if !isAtStart && self.replayHandled {
                         self.replayHandled = false
                     }
@@ -203,7 +217,7 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 					} else {
 						self.consecutiveZeroPolls = 0
 					}
-					
+
 					self.lastPosition = status.position
 					self.currentPlaybackTime = status.position
 				}
@@ -243,7 +257,7 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 
 			Task {
 				try? await self.lastFMClient.scrobble(track: current, timestamp: Date())
-                
+
                 let record = ScrobbleRecord(
                     track: current,
                     timestamp: Date(),
@@ -267,7 +281,7 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 
 		RunLoop.main.add(scrobbleTimer!, forMode: .common)
 	}
-    
+
     @MainActor
     public func stopSrobbleTimer() {
         scrobbleTimer?.invalidate()
