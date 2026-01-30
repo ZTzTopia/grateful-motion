@@ -418,9 +418,20 @@ class LastFMClient: ObservableObject {
 		return (response.session.key, response.session.name)
 	}
 
+    func customPercentEncode(_ s: String) -> String {
+        var allowed = CharacterSet.urlQueryAllowed
+        allowed.remove(charactersIn: "+")
+        return s.addingPercentEncoding(withAllowedCharacters: allowed)!
+    }
+
 	private func performRequest(params: [String: String]) async throws -> Data {
 		var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true)!
-		components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
+        components.percentEncodedQueryItems = params.map {
+            URLQueryItem(
+                name: customPercentEncode($0.key),
+                value: customPercentEncode($0.value)
+            )
+        }
 
 		var request = URLRequest(url: components.url!)
 		request.httpMethod = "POST"
