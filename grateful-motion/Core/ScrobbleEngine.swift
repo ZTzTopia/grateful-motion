@@ -12,14 +12,12 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 	@Published var sessionKey: String?
 	@Published var recentScrobbles: [ScrobbleRecord] = []
 
-	@Published var similarTracks: [SimilarTrack] = []
-	@Published var similarArtists: [SimilarArtist] = []
 	@Published var scrobbleCount: Int = 0
 
     @Published var lastArtworkURL: URL?
 
 	private var artworkFetchTask: Task<Void, Never>?
-	private var similarItemsFetchTask: Task<Void, Never>?
+	private var prefetchTask: Task<Void, Never>?
 
 	private var lastFMClient: LastFMClient
 	private var scrobbleDatabase: ScrobbleDatabase
@@ -55,6 +53,14 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 			consecutiveZeroPolls = 0
 
 			NSLog("ScrobbleEngine: New track: \(processedTrack.title) - \(processedTrack.artist) with duration \(processedTrack.duration)")
+
+			if let cachedTrack = recentScrobbles.first(where: { $0.track.isSameTrack(as: processedTrack) })?.track,
+			   let tracks = cachedTrack.similarTracks, !tracks.isEmpty,
+			   let artists = cachedTrack.similarArtists, !artists.isEmpty {
+				NSLog("ScrobbleEngine: Using cached similar items for: \(processedTrack.title)")
+				currentTrack?.similarTracks = tracks
+				currentTrack?.similarArtists = artists
+			}
 
 			Task {
 				try? await lastFMClient.updateNowPlaying(track: processedTrack)
@@ -106,24 +112,29 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
                 }
             }
 
-			Task {
-				async let tracksTask = lastFMClient.getSimilarTracks(
-					track: processedTrack,
-					limit: 5
-				)
-				async let artistsTask = lastFMClient.getSimilarArtists(
-					track: processedTrack,
-					limit: 5
-				)
+			if currentTrack?.similarTracks == nil || currentTrack?.similarArtists == nil {
+				Task {
+					async let tracksTask = lastFMClient.getSimilarTracks(
+						track: processedTrack,
+						limit: 5
+					)
+					async let artistsTask = lastFMClient.getSimilarArtists(
+						track: processedTrack,
+						limit: 5
+					)
 
-				do {
-					let (tracks, artists) = try await (tracksTask, artistsTask)
-					Task { @MainActor in
-						self.similarTracks = tracks
-						self.similarArtists = artists
+					do {
+						let (tracks, artists) = try await (tracksTask, artistsTask)
+						Task { @MainActor in
+							guard let track = self.currentTrack, track.isSameTrack(as: processedTrack) else { return }
+							var updatedTrack = track
+							updatedTrack.similarTracks = tracks
+							updatedTrack.similarArtists = artists
+							self.currentTrack = updatedTrack
+						}
+					} catch {
+						NSLog("ScrobbleEngine: Failed to fetch similar items: \(error)")
 					}
-				} catch {
-					NSLog("ScrobbleEngine: Failed to fetch similar items: \(error)")
 				}
 			}
 
@@ -308,6 +319,40 @@ class ScrobbleEngine: ObservableObject, @unchecked Sendable {
 			await MainActor.run {
 				self.recentScrobbles = scrobbles
 				self.scrobbleCount = totalCount
+			}
+
+			prefetchSimilarContent()
+		}
+	}
+
+	private func prefetchSimilarContent() {
+		prefetchTask?.cancel()
+		prefetchTask = Task {
+			for index in recentScrobbles.indices {
+				guard !Task.isCancelled else { break }
+
+				let record = recentScrobbles[index]
+				let track = record.track
+
+				if track.similarTracks == nil || track.similarArtists == nil {
+					do {
+						async let tracksTask = lastFMClient.getSimilarTracks(track: track, limit: 5)
+						async let artistsTask = lastFMClient.getSimilarArtists(track: track, limit: 5)
+
+						let (tracks, artists) = try await (tracksTask, artistsTask)
+
+						await MainActor.run {
+							var updatedRecord = record
+							updatedRecord.track.similarTracks = tracks
+							updatedRecord.track.similarArtists = artists
+							self.recentScrobbles[index] = updatedRecord
+						}
+
+						NSLog("ScrobbleEngine: Prefetched similar items for: \(track.title)")
+					} catch {
+						NSLog("ScrobbleEngine: Failed to prefetch similar items for \(track.title): \(error)")
+					}
+				}
 			}
 		}
 	}

@@ -38,6 +38,8 @@ class PlayerDetector: ObservableObject {
 				return
 			}
 
+            NSLog("PlayerDetector: User info: \(userInfo)")
+
 			let title = userInfo["Name"] as? String
 			let artist = userInfo["Artist"] as? String
 			let album = userInfo["Album"] as? String

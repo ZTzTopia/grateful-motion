@@ -16,6 +16,9 @@ class LastFMClient: ObservableObject {
 		lastConfirmedSignature != nil
 	}
 
+	private var similarContentCache: [String: (data: Any, timestamp: Date)] = [:]
+	private let cacheDuration: TimeInterval = 14400
+
 	private static let encryptionKey: [UInt8] = [
 		0x2a, 0x7e, 0x4f, 0x9c, 0x1b, 0x6d, 0x8a, 0x3e,
 		0x5c, 0x2f, 0x9d, 0x7a, 0x1e, 0x4b, 0x8c, 0x3f,
@@ -356,10 +359,21 @@ class LastFMClient: ObservableObject {
 	}
 
 	func getSimilarTracks(track: Track, limit: Int = 5) async throws -> [SimilarTrack] {
+		let cacheKey = "track:\(track.artist):\(track.title):\(limit)"
+
+		if let cached = similarContentCache[cacheKey] {
+			let age = Date().timeIntervalSince(cached.timestamp)
+			if age < cacheDuration {
+				NSLog("LastFMClient: Using cached similar tracks for \(track.title)")
+				return cached.data as! [SimilarTrack]
+			}
+		}
+
 		let params = [
 			"method": "track.getSimilar",
 			"artist": track.artist,
 			"track": track.title,
+			"autocorrect": "1",
 			"limit": String(limit),
 			"api_key": apiKey,
 			"format": "json"
@@ -369,7 +383,7 @@ class LastFMClient: ObservableObject {
 
 		let response = try JSONDecoder().decode(SimilarTracksResponse.self, from: data)
 
-		return response.similartracks.track.map { item in
+		let tracks = response.similartracks.track.map { item in
 			SimilarTrack(
 				name: item.name,
 				artist: item.artist.name,
@@ -377,12 +391,26 @@ class LastFMClient: ObservableObject {
 				url: item.url
 			)
 		}
+
+		similarContentCache[cacheKey] = (data: tracks, timestamp: Date())
+		return tracks
 	}
 
 	func getSimilarArtists(track: Track, limit: Int = 5) async throws -> [SimilarArtist] {
+		let cacheKey = "artist:\(track.artist):\(limit)"
+
+		if let cached = similarContentCache[cacheKey] {
+			let age = Date().timeIntervalSince(cached.timestamp)
+			if age < cacheDuration {
+				NSLog("LastFMClient: Using cached similar artists for \(track.artist)")
+				return cached.data as! [SimilarArtist]
+			}
+		}
+
 		let params = [
 			"method": "artist.getSimilar",
 			"artist": track.artist,
+			"autocorrect": "1",
 			"limit": String(limit),
 			"api_key": apiKey,
 			"format": "json"
@@ -392,13 +420,16 @@ class LastFMClient: ObservableObject {
 
 		let response = try JSONDecoder().decode(SimilarArtistsResponse.self, from: data)
 
-		return response.similarartists.artist.map { item in
+		let artists = response.similarartists.artist.map { item in
 			SimilarArtist(
 				name: item.name,
 				match: Double(item.match) ?? 0.0,
 				url: item.url
 			)
 		}
+
+		similarContentCache[cacheKey] = (data: artists, timestamp: Date())
+		return artists
 	}
 
 	func getMobileSession(username: String, password: String) async throws -> (sessionKey: String, username: String) {
@@ -572,20 +603,5 @@ struct SimilarArtistsContainer: Codable {
 struct SimilarArtistItem: Codable {
 	let name: String
 	let match: String
-	let url: String?
-}
-
-struct SimilarTrack: Identifiable {
-	let id = UUID()
-	let name: String
-	let artist: String
-	let match: Double
-	let url: String?
-}
-
-struct SimilarArtist: Identifiable {
-	let id = UUID()
-	let name: String
-	let match: Double
 	let url: String?
 }

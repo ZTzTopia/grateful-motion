@@ -2,7 +2,7 @@ import Foundation
 
 struct ScrobbleRecord: Codable, Identifiable {
 	let id: UUID
-	let track: Track
+	var track: Track
 	let timestamp: Date
 	let status: ScrobbleStatus
 

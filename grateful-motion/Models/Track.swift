@@ -11,6 +11,8 @@ struct Track: Codable, Identifiable {
 	var repeatMode: RepeatMode = .off
 	var lastPlayedAt: Date
 	var artworkURL: URL?
+	var similarTracks: [SimilarTrack]?
+	var similarArtists: [SimilarArtist]?
 
 	enum PlayerState: String, Codable {
 		case playing

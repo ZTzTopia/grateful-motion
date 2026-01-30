@@ -14,7 +14,6 @@ class StatusMenuController: NSObject, NSMenuDelegate {
     private var artworkCache: [URL: NSImage] = [:]
     private var artworkTasks: [URL: Task<NSImage?, Never>] = [:]
     private var placeholderImage: NSImage!
-    private var similarItemsTasks: [String: Task<(artists: [SimilarArtist], tracks: [SimilarTrack]), Error>] = [:]
 
     private var isMenuOpen = false
     private var needsMenuUpdate = false
@@ -90,10 +89,7 @@ class StatusMenuController: NSObject, NSMenuDelegate {
 
         guard let track = menu.items.first?.representedObject as? Track else { return }
 
-        let hasLoaders = menu.items.contains { $0.tag == 101 || $0.tag == 102 }
-        if hasLoaders {
-            fetchSimilarData(in: menu, for: track)
-        }
+        fetchSimilarData(in: menu, for: track)
     }
 
     private func refreshSimilarData(_ menu: NSMenu, for track: Track) {
@@ -113,51 +109,33 @@ class StatusMenuController: NSObject, NSMenuDelegate {
             }
         }
 
-        rebuildSimilarSection(in: menu, for: track)
-    }
-
-    private func rebuildSimilarSection(in menu: NSMenu, for track: Track) {
-        let loadingArtists = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
-        loadingArtists.isEnabled = false
-        loadingArtists.tag = 101
-        loadingArtists.representedObject = track
-        menu.addItem(loadingArtists)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let tracksHeader = NSMenuItem(title: "Similar Tracks", action: nil, keyEquivalent: "")
-        tracksHeader.isEnabled = false
-        menu.addItem(tracksHeader)
-
-        let loadingTracks = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
-        loadingTracks.isEnabled = false
-        loadingTracks.tag = 102
-        loadingTracks.representedObject = track
-        menu.addItem(loadingTracks)
-
-        fetchSimilarData(in: menu, for: track)
+        let artists = track.similarArtists ?? []
+        let tracks = track.similarTracks ?? []
+        populateSubmenu(menu, artists: artists, tracks: tracks)
     }
 
     private func fetchSimilarData(in menu: NSMenu, for track: Track) {
-        let taskKey = "\(track.artist)-\(track.title)"
-        if similarItemsTasks[taskKey] != nil { return }
-
-        let task = Task {
-            async let artists = lastFMClient.getSimilarArtists(track: track)
-            async let tracks = lastFMClient.getSimilarTracks(track: track)
-            return try await (artists: artists, tracks: tracks)
-        }
-
-        similarItemsTasks[taskKey] = task
-
-        Task { @MainActor in
+        Task {
             do {
-                let (artists, tracks) = try await task.value
-                self.populateSubmenu(menu, artists: artists, tracks: tracks, setLoaded: true)
+                async let artistsTask = lastFMClient.getSimilarArtists(track: track, limit: 5)
+                async let tracksTask = lastFMClient.getSimilarTracks(track: track, limit: 5)
+
+                let (artists, tracks) = try await (artistsTask, tracksTask)
+
+                await MainActor.run {
+                    populateSubmenu(menu, artists: artists, tracks: tracks)
+
+                    if let currentTrack = scrobbleEngine.currentTrack,
+                       currentTrack.isSameTrack(as: track) {
+                        var updatedTrack = currentTrack
+                        updatedTrack.similarArtists = artists
+                        updatedTrack.similarTracks = tracks
+                        scrobbleEngine.currentTrack = updatedTrack
+                    }
+                }
             } catch {
-                self.handleSubmenuError(in: menu)
+                NSLog("StatusMenuController: Failed to fetch similar items: \(error)")
             }
-            self.similarItemsTasks[taskKey] = nil
         }
     }
 
@@ -436,11 +414,20 @@ class StatusMenuController: NSObject, NSMenuDelegate {
         artistsHeader.isEnabled = false
         submenu.addItem(artistsHeader)
 
-        let loadingArtists = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
-        loadingArtists.isEnabled = false
-        loadingArtists.tag = 101
-        loadingArtists.representedObject = track
-        submenu.addItem(loadingArtists)
+        if let artists = track.similarArtists, !artists.isEmpty {
+            for artist in artists {
+                let artistItem = NSMenuItem(title: "\(artist.name) (\(Int(artist.match * 100))%)", action: #selector(openSimilarArtist(_:)), keyEquivalent: "")
+                artistItem.target = self
+                artistItem.representedObject = artist
+                submenu.addItem(artistItem)
+            }
+        } else {
+            let loadingArtists = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
+            loadingArtists.isEnabled = false
+            loadingArtists.tag = 101
+            loadingArtists.representedObject = track
+            submenu.addItem(loadingArtists)
+        }
 
         submenu.addItem(NSMenuItem.separator())
 
@@ -448,11 +435,20 @@ class StatusMenuController: NSObject, NSMenuDelegate {
         tracksHeader.isEnabled = false
         submenu.addItem(tracksHeader)
 
-        let loadingTracks = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
-        loadingTracks.isEnabled = false
-        loadingTracks.tag = 102
-        loadingTracks.representedObject = track
-        submenu.addItem(loadingTracks)
+        if let tracks = track.similarTracks, !tracks.isEmpty {
+            for similarTrack in tracks {
+                let trackItem = NSMenuItem(title: "\(similarTrack.name) - \(similarTrack.artist) (\(Int(similarTrack.match * 100))%)", action: #selector(openSimilarTrack(_:)), keyEquivalent: "")
+                trackItem.target = self
+                trackItem.representedObject = similarTrack
+                submenu.addItem(trackItem)
+            }
+        } else {
+            let loadingTracks = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
+            loadingTracks.isEnabled = false
+            loadingTracks.tag = 102
+            loadingTracks.representedObject = track
+            submenu.addItem(loadingTracks)
+        }
 
         return submenu
     }
@@ -674,12 +670,6 @@ class StatusMenuController: NSObject, NSMenuDelegate {
                 NSWorkspace.shared.open(url)
             }
         }
-    }
-
-    @objc private func showSimilarArtists(_ sender: NSMenuItem) {
-    }
-
-    @objc private func showSimilarTracks(_ sender: NSMenuItem) {
     }
 
     @objc private func toggleScrobbling() {
