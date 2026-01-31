@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CommonCrypto
+import CryptoKit
 
 @MainActor
 class LastFMClient: ObservableObject {
@@ -153,11 +154,7 @@ class LastFMClient: ObservableObject {
 		let signatureSource = sortedParams + apiSecret
 
 		let data = signatureSource.data(using: .utf8)!
-		var digest = [UInt8](repeating: 0, count: Int(CC_MD5_DIGEST_LENGTH))
-
-		_ = data.withUnsafeBytes { (body: UnsafeRawBufferPointer) in
-			CC_MD5(body.baseAddress, CC_LONG(data.count), &digest)
-		}
+		let digest = Insecure.MD5.hash(data: data)
 
 		return digest.map { String(format: "%02x", $0) }.joined()
 	}
@@ -463,18 +460,12 @@ class LastFMClient: ObservableObject {
 		return (response.session.key, response.session.name)
 	}
 
-    func customPercentEncode(_ s: String) -> String {
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: "+")
-        return s.addingPercentEncoding(withAllowedCharacters: allowed)!
-    }
-
 	private func performRequest(params: [String: String]) async throws -> Data {
 		var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true)!
         components.percentEncodedQueryItems = params.map {
             URLQueryItem(
-                name: customPercentEncode($0.key),
-                value: customPercentEncode($0.value)
+                name: $0.key.customPercentEncoded(),
+                value: $0.value.customPercentEncoded()
             )
         }
 

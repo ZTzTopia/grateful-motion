@@ -58,19 +58,11 @@ extension Track {
 		return String(format: "%d:%02d", minutes, seconds)
 	}
 
-    // TODO: Move it to utils
-    func normalize(_ s: String) -> String {
-        s.lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: .diacriticInsensitive, locale: .current)
-            .replacingOccurrences(of: "’", with: "'")
-    }
-
 	func isSameTrack(as other: Track?) -> Bool {
 		guard let other = other else { return false }
 
-        let titleMatch = normalize(title) == normalize(other.title)
-        let artistMatch = normalize(artist) == normalize(other.artist)
+        let titleMatch = title.normalize() == other.title.normalize()
+        let artistMatch = artist.normalize() == other.artist.normalize()
         // Should we compare the album too? or this is bad detection?
 
 		if duration == 0 || other.duration == 0 {

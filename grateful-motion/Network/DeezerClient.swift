@@ -8,25 +8,19 @@ class DeezerClient {
 
 	private init() {}
 
-    func customPercentEncode(_ s: String) -> String {
-        var allowed = CharacterSet.urlQueryAllowed
-        allowed.remove(charactersIn: "+")
-        return s.addingPercentEncoding(withAllowedCharacters: allowed)!
-    }
-
 	func searchTrack(artist: String?, album: String?, track: String) async throws -> [DeezerTrack] {
 		var query = "?strict=on&q="
 
 		if !track.isEmpty {
-			query += "track:\"\(customPercentEncode(track))\" "
+			query += "track:\"\(track.customPercentEncoded())\" "
 		}
 
 		if let artist = artist, !artist.isEmpty {
-			query += "artist:\"\(customPercentEncode(artist))\" "
+			query += "artist:\"\(artist.customPercentEncoded())\" "
 		}
 
 		if let album = album, !album.isEmpty {
-			query += "album:\"\(customPercentEncode(album))\" "
+			query += "album:\"\(album.customPercentEncoded())\" "
 		}
 
 		let url = URL(string: "\(baseURL)/search/track\(query)")!
@@ -34,7 +28,7 @@ class DeezerClient {
 	}
 
 	func searchArtist(name: String) async throws -> [DeezerArtist] {
-		let query = "?q=\(customPercentEncode(name))"
+		let query = "?q=\(name.customPercentEncoded())"
 		let url = URL(string: "\(baseURL)/search/artist\(query)")!
 		return try await performRequest(url: url, responseType: DeezerSearchResponse<DeezerArtist>.self).data
 	}
