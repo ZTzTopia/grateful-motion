@@ -358,6 +358,20 @@ class LastFMClient: ObservableObject {
 		return nil
 	}
 
+    func hasCachedSimilarData(for track: Track) -> Bool {
+        let trackCacheKey = "track:\(track.artist):\(track.title):5"
+        let artistCacheKey = "artist:\(track.artist):5"
+        
+        if let trackCached = similarContentCache[trackCacheKey],
+           let artistCached = similarContentCache[artistCacheKey] {
+            let trackAge = Date().timeIntervalSince(trackCached.timestamp)
+            let artistAge = Date().timeIntervalSince(artistCached.timestamp)
+            return trackAge < cacheDuration && artistAge < cacheDuration
+        }
+
+        return false
+    }
+
 	func getSimilarTracks(track: Track, limit: Int = 5) async throws -> [SimilarTrack] {
 		let cacheKey = "track:\(track.artist):\(track.title):\(limit)"
 

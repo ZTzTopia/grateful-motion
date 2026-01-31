@@ -89,29 +89,40 @@ class StatusMenuController: NSObject, NSMenuDelegate {
 
         guard let track = menu.items.first?.representedObject as? Track else { return }
 
+        if !lastFMClient.hasCachedSimilarData(for: track) {
+            resetSubmenuToLoading(menu, for: track)
+        }
+
         fetchSimilarData(in: menu, for: track)
     }
 
-    private func refreshSimilarData(_ menu: NSMenu, for track: Track) {
+    private func resetSubmenuToLoading(_ menu: NSMenu, for track: Track) {
         let artistsHeaderIndex = menu.items.firstIndex(where: { $0.title == "Similar Artists" })
-
-        if let index = artistsHeaderIndex {
-            while menu.items.count > index + 1 {
-                menu.removeItem(at: index + 1)
-            }
-        }
-
         let tracksHeaderIndex = menu.items.firstIndex(where: { $0.title == "Similar Tracks" })
 
         if let index = tracksHeaderIndex {
             while menu.items.count > index + 1 {
                 menu.removeItem(at: index + 1)
             }
+
+            let loadingTracks = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
+            loadingTracks.isEnabled = false
+            loadingTracks.tag = 102
+            loadingTracks.representedObject = track
+            menu.addItem(loadingTracks)
         }
 
-        let artists = track.similarArtists ?? []
-        let tracks = track.similarTracks ?? []
-        populateSubmenu(menu, artists: artists, tracks: tracks)
+        if let index = artistsHeaderIndex {
+            let nextIndex = index + 1
+            while nextIndex < menu.items.count && !menu.items[nextIndex].isSeparatorItem && menu.items[nextIndex].title != "Similar Tracks" {
+                menu.removeItem(at: nextIndex)
+            }
+            let loadingArtists = NSMenuItem(title: "Loading...", action: nil, keyEquivalent: "")
+            loadingArtists.isEnabled = false
+            loadingArtists.tag = 101
+            loadingArtists.representedObject = track
+            menu.insertItem(loadingArtists, at: index + 1)
+        }
     }
 
     private func fetchSimilarData(in menu: NSMenu, for track: Track) {
@@ -135,6 +146,9 @@ class StatusMenuController: NSObject, NSMenuDelegate {
                 }
             } catch {
                 NSLog("StatusMenuController: Failed to fetch similar items: \(error)")
+                await MainActor.run {
+                    handleSubmenuError(in: menu)
+                }
             }
         }
     }
